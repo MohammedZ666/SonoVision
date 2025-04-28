@@ -25,7 +25,7 @@ class _MyHomePageState extends State<MyHomePage> {
   late List<CameraDescription> _cameras;
   late IsolateInterpreter _isolateInterpreter;
   late Interpreter _interpreter;
-  final String modelName = 'yolo11n_int8.tflite';
+  final String modelName = 'efficientdet-lite2.tflite';
   bool _isReady = false;
   List<DetectionResult> _results = [];
   late List<int> _inputShape, _outputShape;
@@ -71,13 +71,8 @@ class _MyHomePageState extends State<MyHomePage> {
           interpreterOptions.addDelegate(
             GpuDelegateV2(options: GpuDelegateOptionsV2()),
           );
-          _interpreter = await Interpreter.fromAsset(
-            "assets/$modelName",
-            options: interpreterOptions,
-          );
           logger.i('GPU Available');
         } catch (e) {
-          interpreterOptions = InterpreterOptions();
           interpreterOptions.addDelegate(
             XNNPackDelegate(options: XNNPackDelegateOptions(numThreads: 5)),
           );
@@ -106,26 +101,31 @@ class _MyHomePageState extends State<MyHomePage> {
       }
 
       _inputShape = _interpreter.getInputTensor(0).shape;
-      _outputShape = _interpreter.getOutputTensor(0).shape;
-      var totalInputSize = 1;
-      var totalOutputSize = 1;
+      logger.i("InputShape $_inputShape");
 
-      for (var i = 0; i < _inputShape.length; i++) {
-        totalInputSize = totalInputSize * _inputShape[i];
+      final input =
+          List.filled(
+                _inputShape.reduce((a, b) => a * b),
+                1,
+              ).reshape(_inputShape)
+              as List<Object>;
+
+      Map<int, List<dynamic>> outputs = {};
+      for (var i = 0; i < _interpreter.getOutputTensors().length; i++) {
+        var shape = _interpreter.getOutputTensor(i).shape;
+        outputs[i] = List.filled(
+          shape.reduce((a, b) => a * b),
+          1,
+        ).reshape(shape);
+        logger.i("OutputShape [$i]-> $shape");
       }
-      for (var i = 0; i < _outputShape.length; i++) {
-        totalOutputSize = totalOutputSize * _outputShape[i];
-      }
 
-      logger.e("Shapes $_inputShape -> $_outputShape");
-
-      var input = List.filled(totalInputSize, 1).reshape(_inputShape);
-      var output = List.filled(totalOutputSize, 0).reshape(_outputShape);
-
-      _interpreter.run(input, output);
       _isolateInterpreter = await IsolateInterpreter.create(
         address: _interpreter.address,
       );
+      // await _isolateInterpreter.runForMultipleInputs([input], outputs);
+      _interpreter.runForMultipleInputs([input], outputs);
+      logger.i(outputs.toString());
       logger.i("Model '$modelName' initialized successfully");
     } catch (e, stackTrace) {
       logger.e(
@@ -169,8 +169,12 @@ class _MyHomePageState extends State<MyHomePage> {
 
     await _isolateInterpreter.run(input, output);
     final results = _parseOutput(output, image.width, image.height);
-    logger.e("Results, ${results.first.toString()}");
-    setState(() => _results = results);
+    if (results.isNotEmpty) {
+      logger.e(
+        "Results, ${results.length}, ${_interpreter.lastNativeInferenceDurationMicroSeconds}",
+      );
+      setState(() => _results = results);
+    }
   }
 
   List<DetectionResult> _parseOutput(
@@ -178,8 +182,7 @@ class _MyHomePageState extends State<MyHomePage> {
     int originalWidth,
     int originalHeight,
   ) {
-    // YOLOv8 output format: [1, 8400, 85]
-    final predictions = output[0] as List<List<double>>;
+    final predictions = output[0];
     final results = <DetectionResult>[];
     const confThreshold = 0.5;
     // const iouThreshold = 0.5;
@@ -194,7 +197,7 @@ class _MyHomePageState extends State<MyHomePage> {
       if (confidence < confThreshold) continue;
 
       final classId = prediction[5].toInt();
-      ;
+
       // var maxScore = 0.0;
       // for (var i = 5; i < prediction.length; i++) {
       //   final score = prediction[i] * confidence;
@@ -217,7 +220,6 @@ class _MyHomePageState extends State<MyHomePage> {
       final top = cy - h / 2;
       final right = cx + w / 2;
       final bottom = cy + h / 2;
-
       results.add(
         DetectionResult(
           left: left,
@@ -228,11 +230,10 @@ class _MyHomePageState extends State<MyHomePage> {
           confidence: prediction[4],
         ),
       );
+      if (results.length == 5) break;
     }
 
-    return results;
-
-    // return _nonMaxSuppression(results, iouThreshold);
+    return _nonMaxSuppression(results, 0.5);
   }
 
   List<DetectionResult> _nonMaxSuppression(
