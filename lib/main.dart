@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
-import 'yolocator.dart';
+import 'detector_widget.dart';
+import 'package:worker_manager/worker_manager.dart';
 
 var logger = Logger(printer: PrettyPrinter());
-void main() {
+void main() async {
+  workerManager.log = true;
+  await workerManager.init();
   runApp(const MyApp());
 }
 
@@ -18,7 +21,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const DetectorWidget(title: 'Detector'),
     );
   }
 }

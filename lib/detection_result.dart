@@ -4,7 +4,7 @@ class DetectionResult {
   final double right;
   final double bottom;
   final String label;
-  final double confidence;
+  final confidence;
 
   DetectionResult({
     required this.left,
