@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_tflite/detector_isolate.dart';
+import 'package:flutter_tflite/service/detector_isolate.dart';
+import 'package:flutter_tflite/models/screen_params.dart';
 import 'package:logger/logger.dart';
 import 'custom_painter.dart';
-import 'detection_result.dart';
+import '../models/detection_result.dart';
 
 var logger = Logger(printer: PrettyPrinter());
 
@@ -57,12 +58,17 @@ class _DetectorWidgetState extends State<DetectorWidget>
     List<CameraDescription> cameras = await availableCameras();
     _cameraController = CameraController(
       cameras[0],
-      ResolutionPreset.low,
+      ResolutionPreset.medium,
       enableAudio: false,
       imageFormatGroup: ImageFormatGroup.jpeg,
     );
     await _cameraController.initialize();
     await _cameraController.startImageStream(onLatestIFrameAvailable);
+    setState(() {});
+    ScreenParams.cameraPreviewSize = _cameraController.value.previewSize!;
+    logger.e(
+      "Camera Preview size ${ScreenParams.cameraPreviewSize} Screen size ${ScreenParams.screenSize}",
+    );
   }
 
   void onLatestIFrameAvailable(CameraImage cameraImage) {
@@ -72,6 +78,8 @@ class _DetectorWidgetState extends State<DetectorWidget>
   @override
   Widget build(BuildContext context) {
     if (!_isReady) return Container();
+
+    var aspect = 1 / _cameraController.value.aspectRatio;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -79,10 +87,16 @@ class _DetectorWidgetState extends State<DetectorWidget>
       ),
       body: Stack(
         children: [
-          CameraPreview(_cameraController),
-          CustomPaint(
-            painter: BoundingBoxPainter(_results),
-            size: Size.infinite,
+          AspectRatio(
+            aspectRatio: aspect,
+            child: CameraPreview(_cameraController),
+          ),
+          AspectRatio(
+            aspectRatio: aspect,
+            child: CustomPaint(
+              painter: BoundingBoxPainter(_results),
+              size: Size.infinite,
+            ),
           ),
         ],
       ),
@@ -107,9 +121,9 @@ class _DetectorWidgetState extends State<DetectorWidget>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _cameraController?.dispose();
+    _cameraController.dispose();
     _detector?.stop();
-    _subscription?.cancel();
+    _subscription.cancel();
     super.dispose();
   }
 }

@@ -83,4 +83,35 @@ class ImageUtils {
 
     return image;
   }
+
+  static imglib.Image fitCenterBitmap(
+    imglib.Image originalImage,
+    int targetWidth,
+    int targetHeight,
+  ) {
+    final result = imglib.Image(
+      width: targetWidth,
+      height: targetHeight,
+      numChannels: 3,
+    );
+    //  Scale 0.93333334 width:448 originalWidth 640 originalHeight 480
+    //  Scale 0.9333333333333333 width 448 originalWidth 720 originalHeight 480
+    //  Left 14.933334 scaledWidth:418
+    //  Left 15 scaledWidth 418
+
+    final scale = targetHeight / originalImage.height;
+    final scaledWidth = (targetWidth * scale).round();
+    final scaledImage = imglib.copyResize(
+      originalImage,
+      width: scaledWidth,
+      height: targetHeight,
+      interpolation: imglib.Interpolation.linear,
+    );
+
+    final left = (targetWidth - scaledWidth) ~/ 2;
+
+    imglib.compositeImage(result, scaledImage, dstX: left, dstY: 0);
+
+    return result;
+  }
 }

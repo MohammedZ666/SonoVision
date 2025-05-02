@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
-import 'detector_widget.dart';
+import 'widgets/detector_widget.dart';
 import 'package:worker_manager/worker_manager.dart';
+import 'models/screen_params.dart';
 
 var logger = Logger(printer: PrettyPrinter());
 void main() async {
@@ -16,6 +17,8 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
+    ScreenParams.screenSize = MediaQuery.sizeOf(context);
+
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(

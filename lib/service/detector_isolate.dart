@@ -8,12 +8,15 @@ import 'dart:isolate';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_tflite/models/screen_params.dart';
 import 'package:image/image.dart' as imglib;
 import 'package:logger/logger.dart';
-import 'image_utils.dart';
-import 'detection_result.dart';
+import '../utils/image_utils.dart';
+import '../../models/detection_result.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
+import 'package:archive/archive.dart';
 
 ///////////////////////////////////////////////////////////////////////////////
 // **WARNING:** This is not production code and is only intended to be used for
@@ -132,10 +135,19 @@ class Detector {
 
   static Future<List<String>> _loadLabels() async {
     // return (await rootBundle.loadString(_labelPath)).split('\n');
-    return await Future.delayed(
-      Duration(microseconds: 1),
-      () => ['dummyLabel1', 'dummyLabel2', 'dummyLabel3'],
-    );
+    // 1. Load ZIP file from assets
+    final ByteData zipData = await rootBundle.load(_modelPath);
+    final Uint8List zipBytes = zipData.buffer.asUint8List();
+
+    // 2. Decode ZIP
+    final Archive archive = ZipDecoder().decodeBytes(zipBytes);
+
+    for (final file in archive.files) {
+      if (file.name.contains("label")) {
+        return String.fromCharCodes(file.content).split('\n');
+      }
+    }
+    return await Future.delayed(Duration(microseconds: 1), () => ['']);
   }
 
   /// Starts CameraImage processing
@@ -257,10 +269,7 @@ class _DetectorServer {
     late imglib.Image cameraImageRgb;
     if (cameraImage.format.group == ImageFormatGroup.yuv420 &&
         Platform.isAndroid) {
-      cameraImageRgb = imglib.copyRotate(
-        ImageUtils.convertYUV420ToImage(cameraImage),
-        angle: 90,
-      );
+      cameraImageRgb = ImageUtils.convertYUV420ToImage(cameraImage);
     } else if (cameraImage.format.group == ImageFormatGroup.bgra8888 &&
         Platform.isIOS) {
       cameraImageRgb = ImageUtils.convertBGRA8888ToImage(cameraImage);
@@ -270,13 +279,21 @@ class _DetectorServer {
         "Image type -> ${cameraImage.format.group}, Platform ${Platform.operatingSystem}",
       );
     }
+    var processImage = imglib.copyResize(
+      width: cameraImageRgb.height * 4 ~/ 3,
+      cameraImageRgb,
+      height: cameraImageRgb.height,
+    );
+    processImage = ImageUtils.fitCenterBitmap(
+      cameraImageRgb,
+      (_interpreter?.getInputTensor(0).shape[2])!,
+      (_interpreter?.getInputTensor(0).shape[1])!,
+    );
 
-    final pixels = imglib
-        .copyResize(
-          cameraImageRgb,
-          width: _interpreter!.getInputTensor(0).shape[1],
-          height: _interpreter!.getInputTensor(0).shape[2],
-        )
+    if (Platform.isAndroid) {
+      processImage = imglib.copyRotate(processImage, angle: 90);
+    }
+    final pixels = processImage
         .getBytes(order: imglib.ChannelOrder.rgb)
         .reshape(_interpreter!.getInputTensor(0).shape);
 
@@ -288,9 +305,7 @@ class _DetectorServer {
     };
 
     try {
-      // await _isolateInterpreter.runForMultipleInputs([pixels], outputs);
       _interpreter!.runForMultipleInputs([pixels], outputs);
-      logger.i("Output from camera stream $outputs");
     } catch (e, stackTrace) {
       logger.e("Interpreter failed", error: e, stackTrace: stackTrace);
     }
@@ -304,7 +319,11 @@ class _DetectorServer {
     );
     if (results.isNotEmpty) {
       logger.i(
-        "Results, ${results.length}, ${_interpreter!.lastNativeInferenceDurationMicroSeconds}",
+        "Results, ${results.length}, ${_interpreter!.lastNativeInferenceDurationMicroSeconds / 1000} ms",
+      );
+    } else {
+      logger.e(
+        "Results, ${results.length}, ${_interpreter!.lastNativeInferenceDurationMicroSeconds / 1000} ms",
       );
     }
     return results;
@@ -320,9 +339,9 @@ class _DetectorServer {
     int originalWidth,
     int originalHeight,
   ) {
-    List locationResult = output[0]![0];
-    List categoryResult = output[1]![0];
-    List scoreResult = output[2]![0];
+    List<List<double>> locationResult = output[0]![0];
+    List<double> categoryResult = output[1]![0];
+    List<double> scoreResult = output[2]![0];
     final results = <DetectionResult>[];
     const confThreshold = 0.5;
     // const iouThreshold = 0.5;
@@ -342,15 +361,10 @@ class _DetectorServer {
         continue;
       }
 
-      final top = prediction[0] * modelInputHeight * scaleY;
-      final left = prediction[1] * modelInputWidth * scaleX;
-      final bottom = prediction[2] * modelInputHeight * scaleY;
-      final right = prediction[3] * modelInputWidth * scaleX;
-
-      // final left = cx - w / 2;
-      // final top = cy - h / 2;
-      // final right = cx + w / 2;
-      // final bottom = cy + h / 2;
+      final top = prediction[0];
+      final left = prediction[1];
+      final bottom = prediction[2];
+      final right = prediction[3];
 
       results.add(
         DetectionResult(
@@ -358,11 +372,11 @@ class _DetectorServer {
           top: top,
           right: right,
           bottom: bottom,
-          label: categoryResult[i].toString(),
+          label: _labels![categoryResult[i].toInt()],
           confidence: scoreResult[i],
         ),
       );
-      if (results.length == 10) break;
+      // if (results.length == 10) break;
     }
     return results;
   }
