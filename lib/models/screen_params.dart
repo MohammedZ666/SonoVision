@@ -14,4 +14,9 @@ class ScreenParams {
     screenSize.width,
     screenSize.width * previewRatio,
   );
+
+  static Size center = Size(
+    (screenPreviewSize.width ~/ 2).toDouble(),
+    (screenPreviewSize.height ~/ 2).toDouble(),
+  );
 }

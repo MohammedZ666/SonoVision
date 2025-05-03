@@ -8,9 +8,7 @@ import 'dart:isolate';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_tflite/models/screen_params.dart';
 import 'package:image/image.dart' as imglib;
 import 'package:logger/logger.dart';
 import '../utils/image_utils.dart';
@@ -199,11 +197,7 @@ class Detector {
 /// This is where we use the new feature Background Isolate Channels, which
 /// allows us to use plugins from background isolates.
 class _DetectorServer {
-  /// Input size of image (height = width = 300)
-  static const int mlModelInputSize = 448;
-
   /// Result confidence threshold
-  static const double confidence = 0.5;
   Interpreter? _interpreter;
   List<String>? _labels;
 
@@ -343,15 +337,11 @@ class _DetectorServer {
     List<double> categoryResult = output[1]![0];
     List<double> scoreResult = output[2]![0];
     final results = <DetectionResult>[];
-    const confThreshold = 0.5;
     // const iouThreshold = 0.5;
     // const classThreshold = 0.25;
 
-    final scaleX = originalWidth / modelInputWidth;
-    final scaleY = originalHeight / modelInputHeight;
-
     for (var i = 0; i < locationResult.length; i++) {
-      if (scoreResult[i] < confThreshold) continue;
+      if (scoreResult[i] < 0.5) continue;
       final prediction = locationResult[i];
 
       // in the following order: [ymin, xmin, ymax, xmax]
@@ -365,18 +355,22 @@ class _DetectorServer {
       final left = prediction[1];
       final bottom = prediction[2];
       final right = prediction[3];
-
-      results.add(
-        DetectionResult(
-          left: left,
-          top: top,
-          right: right,
-          bottom: bottom,
-          label: _labels![categoryResult[i].toInt()],
-          confidence: scoreResult[i],
-        ),
-      );
-      // if (results.length == 10) break;
+      final String labelText = _labels![categoryResult[i].toInt()];
+      if (labelText == 'tv') {
+        results.add(
+          DetectionResult(
+            left: left,
+            top: top,
+            right: right,
+            bottom: bottom,
+            label: labelText,
+            confidence: scoreResult[i],
+          ),
+        );
+      }
+      if (results.length == 1) {
+        break;
+      }
     }
     return results;
   }

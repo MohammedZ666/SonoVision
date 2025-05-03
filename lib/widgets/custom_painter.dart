@@ -11,12 +11,14 @@ class BoundingBoxPainter extends CustomPainter {
     final paint =
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2;
+          ..strokeWidth = 3;
 
     for (final result in results) {
-      paint.color =
+      Color color =
           Colors.primaries[(result.label.length + result.label.codeUnitAt(0)) %
               Colors.primaries.length];
+      paint.color = color;
+
       final rect = result.renderLocation;
       canvas.drawRect(rect, paint);
 
@@ -24,7 +26,7 @@ class BoundingBoxPainter extends CustomPainter {
       final textSpan = TextSpan(
         text:
             '${result.label} ${(result.confidence * 100).toStringAsFixed(1)}%',
-        style: TextStyle(backgroundColor: Colors.red, color: Colors.white),
+        style: TextStyle(backgroundColor: color, color: Colors.white),
       );
       final textPainter = TextPainter(
         text: textSpan,
