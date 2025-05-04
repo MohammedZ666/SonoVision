@@ -48,13 +48,13 @@ import 'package:archive/archive.dart';
 
 /// All the command codes that can be sent and received between [Detector] and
 /// [_DetectorServer].
-enum _Codes { init, busy, ready, detect, result }
+enum Codes { init, busy, ready, detect, result, select }
 
 /// A command sent between [Detector] and [_DetectorServer].
-class _Command {
-  const _Command(this.code, {this.args});
+class Command {
+  const Command(this.code, {this.args});
 
-  final _Codes code;
+  final Codes code;
   final List<Object>? args;
 }
 
@@ -75,8 +75,14 @@ class Detector {
   late final Interpreter _interpreter;
   late final List<String> _labels;
 
+  List<String> get labels {
+    return _labels;
+  }
+
   // To be used by detector (from UI) to send message to our Service ReceivePort
   late final SendPort _sendPort;
+
+  SendPort get sendPort => _sendPort;
 
   bool _isReady = false;
 
@@ -100,7 +106,7 @@ class Detector {
       await _loadLabels(),
     );
     receivePort.listen((message) {
-      result._handleCommand(message as _Command);
+      result._handleCommand(message as Command);
     });
     return result;
   }
@@ -142,7 +148,13 @@ class Detector {
 
     for (final file in archive.files) {
       if (file.name.contains("label")) {
-        return String.fromCharCodes(file.content).split('\n');
+        List<String> labels = String.fromCharCodes(file.content).split('\n');
+        for (var i = 0; i < labels.length; i++) {
+          if (labels[i].contains('?')) {
+            labels[i] = "undefined$i";
+          }
+        }
+        return labels;
       }
     }
     return await Future.delayed(Duration(microseconds: 1), () => ['']);
@@ -151,15 +163,15 @@ class Detector {
   /// Starts CameraImage processing
   void processFrame(CameraImage cameraImage) {
     if (_isReady) {
-      _sendPort.send(_Command(_Codes.detect, args: [cameraImage]));
+      _sendPort.send(Command(Codes.detect, args: [cameraImage]));
     }
   }
 
   /// Handler invoked when a message is received from the port communicating
   /// with the isolate server.
-  void _handleCommand(_Command command) {
+  void _handleCommand(Command command) {
     switch (command.code) {
-      case _Codes.init:
+      case Codes.init:
         _sendPort = command.args?[0] as SendPort;
         // ----------------------------------------------------------------------
         // Before using platform channels and plugins from background isolates we
@@ -169,16 +181,16 @@ class Detector {
         // ----------------------------------------------------------------------
         RootIsolateToken rootIsolateToken = RootIsolateToken.instance!;
         _sendPort.send(
-          _Command(
-            _Codes.init,
+          Command(
+            Codes.init,
             args: [rootIsolateToken, _interpreter.address, _labels],
           ),
         );
-      case _Codes.ready:
+      case Codes.ready:
         _isReady = true;
-      case _Codes.busy:
+      case Codes.busy:
         _isReady = false;
-      case _Codes.result:
+      case Codes.result:
         _isReady = true;
         resultsStream.add(command.args?[0] as List<DetectionResult>);
       default:
@@ -200,6 +212,7 @@ class _DetectorServer {
   /// Result confidence threshold
   Interpreter? _interpreter;
   List<String>? _labels;
+  late String _select;
 
   _DetectorServer(this._sendPort);
 
@@ -214,17 +227,17 @@ class _DetectorServer {
     ReceivePort receivePort = ReceivePort();
     final _DetectorServer server = _DetectorServer(sendPort);
     receivePort.listen((message) async {
-      final _Command command = message as _Command;
+      final Command command = message as Command;
       await server._handleCommand(command);
     });
     // receivePort.sendPort - used by UI isolate to send commands to the service receiverPort
-    sendPort.send(_Command(_Codes.init, args: [receivePort.sendPort]));
+    sendPort.send(Command(Codes.init, args: [receivePort.sendPort]));
   }
 
   /// Handle the [command] received from the [ReceivePort].
-  Future<void> _handleCommand(_Command command) async {
+  Future<void> _handleCommand(Command command) async {
     switch (command.code) {
-      case _Codes.init:
+      case Codes.init:
         // ----------------------------------------------------------------------
         // The [RootIsolateToken] is required for
         // [BackgroundIsolateBinaryMessenger.ensureInitialized] and must be
@@ -242,11 +255,16 @@ class _DetectorServer {
         BackgroundIsolateBinaryMessenger.ensureInitialized(rootIsolateToken);
         _interpreter = Interpreter.fromAddress(command.args?[1] as int);
         _labels = command.args?[2] as List<String>;
-        _sendPort.send(const _Command(_Codes.ready));
-      case _Codes.detect:
-        _sendPort.send(const _Command(_Codes.busy));
+        _select = (_labels?.first)!;
+        _sendPort.send(const Command(Codes.ready));
+      case Codes.detect:
+        _sendPort.send(const Command(Codes.busy));
         final results = _processImage(command.args?[0] as CameraImage);
-        _sendPort.send(_Command(_Codes.result, args: [results]));
+        _sendPort.send(Command(Codes.result, args: [results]));
+      case Codes.select:
+        _sendPort.send(const Command(Codes.busy));
+        _select = command.args?[0] as String;
+        _sendPort.send(const Command(Codes.ready));
       default:
         debugPrint('_DetectorService unrecognized command ${command.code}');
     }
@@ -273,21 +291,26 @@ class _DetectorServer {
         "Image type -> ${cameraImage.format.group}, Platform ${Platform.operatingSystem}",
       );
     }
-    var processImage = imglib.copyResize(
-      width: cameraImageRgb.height * 4 ~/ 3,
-      cameraImageRgb,
-      height: cameraImageRgb.height,
-    );
-    processImage = ImageUtils.fitCenterBitmap(
-      cameraImageRgb,
-      (_interpreter?.getInputTensor(0).shape[2])!,
-      (_interpreter?.getInputTensor(0).shape[1])!,
-    );
+    // var processImage = imglib.copyResize(
+    //   width: cameraImageRgb.height * 4 ~/ 3,
+    //   cameraImageRgb,
+    //   height: cameraImageRgb.height,
+    // );
+    // processImage = ImageUtils.fitCenterBitmap(
+    //   cameraImageRgb,
+    //   (_interpreter?.getInputTensor(0).shape[2])!,
+    //   (_interpreter?.getInputTensor(0).shape[1])!,
+    // );
 
     if (Platform.isAndroid) {
-      processImage = imglib.copyRotate(processImage, angle: 90);
+      cameraImageRgb = imglib.copyRotate(cameraImageRgb, angle: 90);
     }
-    final pixels = processImage
+    final pixels = imglib
+        .copyResize(
+          cameraImageRgb,
+          width: (_interpreter?.getInputTensor(0).shape[2])!,
+          height: (_interpreter?.getInputTensor(0).shape[1])!,
+        )
         .getBytes(order: imglib.ChannelOrder.rgb)
         .reshape(_interpreter!.getInputTensor(0).shape);
 
@@ -356,7 +379,7 @@ class _DetectorServer {
       final bottom = prediction[2];
       final right = prediction[3];
       final String labelText = _labels![categoryResult[i].toInt()];
-      if (labelText == 'tv') {
+      if (labelText == _select) {
         results.add(
           DetectionResult(
             left: left,
@@ -367,8 +390,6 @@ class _DetectorServer {
             confidence: scoreResult[i],
           ),
         );
-      }
-      if (results.length == 1) {
         break;
       }
     }

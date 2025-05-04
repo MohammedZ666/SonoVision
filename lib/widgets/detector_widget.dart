@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tflite/service/detector_isolate.dart';
 import 'package:flutter_tflite/models/screen_params.dart';
+import 'package:flutter_tflite/widgets/label_selector.dart';
 import 'package:logger/logger.dart';
 import 'custom_painter.dart';
 import '../models/detection_result.dart';
@@ -34,6 +35,7 @@ class _DetectorWidgetState extends State<DetectorWidget>
   late AudioSource _tone;
   double _locX = 0.0;
   double _locY = 0.0;
+  String? _detect;
 
   @override
   void initState() {
@@ -49,15 +51,8 @@ class _DetectorWidgetState extends State<DetectorWidget>
 
   void _initSoundCue() async {
     // Create a sine wave at 440 Hz (A4 note)
-    // final tone = await SoLoud.instance.loadWaveform(
-    //   WaveForm.sin,
-    //   false,
-    //   1.0,
-    //   0.0,
-    // );
-
-    _tone = await SoLoud.instance.loadAsset("assets/sin_125Hz_-3dBFS_2s.wav");
-
+    _tone = await SoLoud.instance.loadWaveform(WaveForm.sin, false, 1.0, 0.0);
+    SoLoud.instance.setWaveformFreq(_tone, 125.0); // A4 note
     // Play the tone
     _handle = await SoLoud.instance.play3d(
       _tone,
@@ -71,18 +66,18 @@ class _DetectorWidgetState extends State<DetectorWidget>
     );
     SoLoud.instance.setPause(_handle, true);
 
-    FlutterCompass.events?.listen((CompassEvent event) {
-      if (event.heading != null) {
-        double heading =
-            event.heading! * pi / 180; // Convert degrees to radians
-        // Assuming z-forward, y-up coordinate system
-        Vector3 at = Vector3(cos(heading), 0, sin(heading)); // Direction facing
-        Vector3 up = Vector3(0, 1, 0); // Up direction
+    // FlutterCompass.events?.listen((CompassEvent event) {
+    //   if (event.heading != null) {
+    //     double heading =
+    //         event.heading! * pi / 180; // Convert degrees to radians
+    //     // Assuming z-forward, y-up coordinate system
+    //     Vector3 at = Vector3(cos(heading), 0, sin(heading)); // Direction facing
+    //     Vector3 up = Vector3(0, 1, 0); // Up direction
 
-        SoLoud.instance.set3dListenerAt(at.x, at.y, at.z); // Facing direction
-        SoLoud.instance.set3dListenerUp(up.x, up.y, up.z); // Up vector
-      }
-    });
+    //     SoLoud.instance.set3dListenerAt(at.x, at.y, at.z); // Facing direction
+    //     SoLoud.instance.set3dListenerUp(up.x, up.y, up.z); // Up vector
+    //   }
+    // });
     logger.e("tone called");
   }
 
@@ -112,6 +107,7 @@ class _DetectorWidgetState extends State<DetectorWidget>
     Detector.start().then((instance) {
       setState(() {
         _detector = instance;
+        _detect = instance.labels.first;
         _subscription = instance.resultsStream.stream.listen((
           List<DetectionResult> values,
         ) {
@@ -160,19 +156,47 @@ class _DetectorWidgetState extends State<DetectorWidget>
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
       ),
-      body: Stack(
+      body: Column(
+        spacing: 50.0,
         children: [
-          AspectRatio(
-            aspectRatio: aspect,
-            child: CameraPreview(_cameraController),
+          Stack(
+            children: [
+              AspectRatio(
+                aspectRatio: aspect,
+                child: CameraPreview(_cameraController),
+              ),
+              AspectRatio(
+                aspectRatio: aspect,
+                child: CustomPaint(
+                  painter: BoundingBoxPainter(_results),
+                  size: Size.infinite,
+                ),
+              ),
+            ],
           ),
-          AspectRatio(
-            aspectRatio: aspect,
-            child: CustomPaint(
-              painter: BoundingBoxPainter(_results),
-              size: Size.infinite,
-            ),
-          ),
+
+          _detect != null
+              ? ElevatedButton(
+                onPressed: () async {
+                  final String result = await Navigator.push(
+                    context,
+                    // Create the SelectionScreen in the next step.
+                    MaterialPageRoute(
+                      builder:
+                          (context) =>
+                              SelectionScreen(labels: (_detector?.labels)!),
+                    ),
+                  );
+                  _detector?.sendPort.send(
+                    Command(Codes.select, args: [result]),
+                  );
+                  setState(() {
+                    _detect = result;
+                  });
+                },
+                child: Text(_detect!),
+              )
+              : Container(),
         ],
       ),
     );
