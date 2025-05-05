@@ -37,7 +37,6 @@ class _DetectorWidgetState extends State<DetectorWidget>
   late SoundHandle _handle;
   double _locX = 0.0;
   double _locY = 0.0;
-  final double sinFreq = 250.0;
 
   @override
   void initState() {
@@ -53,12 +52,12 @@ class _DetectorWidgetState extends State<DetectorWidget>
 
   void _initSoundCue() async {
     final tone = await SoLoud.instance.loadWaveform(
-      WaveForm.sin,
+      WaveForm.square,
       false,
       1.0,
       0.0,
     );
-    SoLoud.instance.setWaveformFreq(tone, sinFreq);
+    SoLoud.instance.setWaveformFreq(tone, 125);
     _handle = await SoLoud.instance.play3d(
       tone,
       0,
@@ -67,6 +66,7 @@ class _DetectorWidgetState extends State<DetectorWidget>
       velX: 0.0,
       velY: 0.0,
       velZ: 0.0,
+      volume: 0.5,
       looping: true,
     );
     SoLoud.instance.setPause(_handle, true);
