@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
+import 'package:flutter_tflite/widgets/label_selector.dart';
 import 'package:logger/logger.dart';
-import 'widgets/detector_widget.dart';
 import 'package:worker_manager/worker_manager.dart';
 import 'models/screen_params.dart';
 
@@ -28,7 +28,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const DetectorWidget(title: 'Detector'),
+      home: SelectionScreen(),
     );
   }
 }

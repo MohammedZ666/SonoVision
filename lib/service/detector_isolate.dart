@@ -66,9 +66,6 @@ var logger = Logger(printer: PrettyPrinter());
 /// are executed in a background isolate.
 /// This class just sends and receives messages to the isolate.
 class Detector {
-  static const String _modelPath = 'assets/efficientdet-lite2.tflite';
-  static const String _labelPath = 'assets/models/labelmap.txt';
-
   Detector._(this._isolate, this._interpreter, this._labels);
 
   final Isolate _isolate;
@@ -92,7 +89,7 @@ class Detector {
       StreamController<List<DetectionResult>>();
 
   /// [main] method equivalent of the isolate...
-  static Future<Detector> start() async {
+  static Future<Detector> start(String modelName, List<String> labels) async {
     final ReceivePort receivePort = ReceivePort();
     // sendPort - To be used by service Isolate to send message to our ReceiverPort
     final Isolate isolate = await Isolate.spawn(
@@ -102,8 +99,8 @@ class Detector {
 
     final Detector result = Detector._(
       isolate,
-      await _loadModel(),
-      await _loadLabels(),
+      await _loadModel(modelName),
+      labels,
     );
     receivePort.listen((message) {
       result._handleCommand(message as Command);
@@ -111,7 +108,7 @@ class Detector {
     return result;
   }
 
-  static Future<Interpreter> _loadModel() async {
+  static Future<Interpreter> _loadModel(String modelName) async {
     final interpreterOptions = InterpreterOptions();
 
     // Use XNNPACK Delegate
@@ -123,7 +120,7 @@ class Detector {
     late Interpreter interpreter;
     try {
       interpreter = await Interpreter.fromAsset(
-        _modelPath,
+        "assets/$modelName",
         options: interpreterOptions,
       );
     } catch (e, stackTrace) {
@@ -137,28 +134,28 @@ class Detector {
     return interpreter;
   }
 
-  static Future<List<String>> _loadLabels() async {
-    // return (await rootBundle.loadString(_labelPath)).split('\n');
-    // 1. Load ZIP file from assets
-    final ByteData zipData = await rootBundle.load(_modelPath);
-    final Uint8List zipBytes = zipData.buffer.asUint8List();
+  // static Future<List<String>> _loadLabels() async {
+  //   // return (await rootBundle.loadString(_labelPath)).split('\n');
+  //   // 1. Load ZIP file from assets
+  //   final ByteData zipData = await rootBundle.load(_modelPath);
+  //   final Uint8List zipBytes = zipData.buffer.asUint8List();
 
-    // 2. Decode ZIP
-    final Archive archive = ZipDecoder().decodeBytes(zipBytes);
+  //   // 2. Decode ZIP
+  //   final Archive archive = ZipDecoder().decodeBytes(zipBytes);
 
-    for (final file in archive.files) {
-      if (file.name.contains("label")) {
-        List<String> labels = String.fromCharCodes(file.content).split('\n');
-        for (var i = 0; i < labels.length; i++) {
-          if (labels[i].contains('?')) {
-            labels[i] = "undefined$i";
-          }
-        }
-        return labels;
-      }
-    }
-    return await Future.delayed(Duration(microseconds: 1), () => ['']);
-  }
+  //   for (final file in archive.files) {
+  //     if (file.name.contains("label")) {
+  //       List<String> labels = String.fromCharCodes(file.content).split('\n');
+  //       for (var i = 0; i < labels.length; i++) {
+  //         if (labels[i].contains('?')) {
+  //           labels[i] = "undefined$i";
+  //         }
+  //       }
+  //       return labels;
+  //     }
+  //   }
+  //   return await Future.delayed(Duration(microseconds: 1), () => ['']);
+  // }
 
   /// Starts CameraImage processing
   void processFrame(CameraImage cameraImage) {

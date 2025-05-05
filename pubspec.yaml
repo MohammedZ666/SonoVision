@@ -39,10 +39,10 @@ dependencies:
   image: ^4.5.4
   worker_manager: ^7.2.3
   archive: ^4.0.7
-  flutter_soloud: ^3.1.8
   flutter_compass: '^0.8.1'
   vector_math: ^2.1.4
   sensors_plus: ^5.0.1
+  flutter_soloud: ^3.1.8
 
 
 

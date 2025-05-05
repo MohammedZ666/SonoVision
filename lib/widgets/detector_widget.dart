@@ -1,22 +1,27 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tflite/service/detector_isolate.dart';
 import 'package:flutter_tflite/models/screen_params.dart';
-import 'package:flutter_tflite/widgets/label_selector.dart';
 import 'package:logger/logger.dart';
 import 'custom_painter.dart';
 import '../models/detection_result.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
-import 'package:flutter_compass/flutter_compass.dart';
-import 'package:vector_math/vector_math.dart';
 
 var logger = Logger(printer: PrettyPrinter());
 
 class DetectorWidget extends StatefulWidget {
-  const DetectorWidget({super.key, required this.title});
+  const DetectorWidget({
+    super.key,
+    required this.title,
+    required this.modelName,
+    required this.detectLabel,
+    required this.labels,
+  });
   final String title;
+  final String modelName;
+  final String detectLabel;
+  final List<String> labels;
 
   @override
   State<DetectorWidget> createState() => _DetectorWidgetState();
@@ -25,17 +30,14 @@ class DetectorWidget extends StatefulWidget {
 class _DetectorWidgetState extends State<DetectorWidget>
     with WidgetsBindingObserver {
   late CameraController _cameraController;
-  final String modelName = 'efficientdet-lite2.tflite';
   bool _isReady = false;
   List<DetectionResult> _results = [];
   Detector? _detector;
   late StreamSubscription _subscription;
-  double p = 10;
   late SoundHandle _handle;
-  late AudioSource _tone;
   double _locX = 0.0;
   double _locY = 0.0;
-  String? _detect;
+  final double sinFreq = 250.0;
 
   @override
   void initState() {
@@ -50,34 +52,24 @@ class _DetectorWidgetState extends State<DetectorWidget>
   }
 
   void _initSoundCue() async {
-    // Create a sine wave at 440 Hz (A4 note)
-    _tone = await SoLoud.instance.loadWaveform(WaveForm.sin, false, 1.0, 0.0);
-    SoLoud.instance.setWaveformFreq(_tone, 125.0); // A4 note
-    // Play the tone
+    final tone = await SoLoud.instance.loadWaveform(
+      WaveForm.sin,
+      false,
+      1.0,
+      0.0,
+    );
+    SoLoud.instance.setWaveformFreq(tone, sinFreq);
     _handle = await SoLoud.instance.play3d(
-      _tone,
+      tone,
       0,
       0,
       0,
-      velX: 0.0, // optional velocity
+      velX: 0.0,
       velY: 0.0,
       velZ: 0.0,
       looping: true,
     );
     SoLoud.instance.setPause(_handle, true);
-
-    // FlutterCompass.events?.listen((CompassEvent event) {
-    //   if (event.heading != null) {
-    //     double heading =
-    //         event.heading! * pi / 180; // Convert degrees to radians
-    //     // Assuming z-forward, y-up coordinate system
-    //     Vector3 at = Vector3(cos(heading), 0, sin(heading)); // Direction facing
-    //     Vector3 up = Vector3(0, 1, 0); // Up direction
-
-    //     SoLoud.instance.set3dListenerAt(at.x, at.y, at.z); // Facing direction
-    //     SoLoud.instance.set3dListenerUp(up.x, up.y, up.z); // Up vector
-    //   }
-    // });
     logger.e("tone called");
   }
 
@@ -86,28 +78,13 @@ class _DetectorWidgetState extends State<DetectorWidget>
     _locY = _results[0].renderLocation.center.dy - ScreenParams.center.height;
     SoLoud.instance.set3dSourcePosition(_handle, _locX, _locY, 0);
     SoLoud.instance.setPause(_handle, false);
-    //   if (SoLoud.instance.getPause(_handle)) {
-    //     SoLoud.instance.play(_tone, looping: true);
-    // if (_results.isNotEmpty) {
-    //   locX = _results[0].renderLocation.center.dx - ScreenParams.center.width;
-    //   locY = _results[0].renderLocation.center.dy - ScreenParams.center.height;
-    //   SoLoud.instance.set3dSourcePosition(_handle, locX, locY, 0);
-    //   if (SoLoud.instance.getPause(_handle)) {
-    //     SoLoud.instance.play(_tone, looping: true);
-    //   }
-    // } else {
-    //   if (!SoLoud.instance.getPause(_handle)) {
-    //     SoLoud.instance.pauseSwitch(_handle);
-    //   }
-    // }
   }
 
   void _initStream() async {
     await _intializeCamera();
-    Detector.start().then((instance) {
+    Detector.start(widget.modelName, widget.labels).then((instance) {
       setState(() {
         _detector = instance;
-        _detect = instance.labels.first;
         _subscription = instance.resultsStream.stream.listen((
           List<DetectionResult> values,
         ) {
@@ -120,6 +97,9 @@ class _DetectorWidgetState extends State<DetectorWidget>
               SoLoud.instance.setPause(_handle, true);
             }
           });
+          _detector?.sendPort.send(
+            Command(Codes.select, args: [widget.detectLabel]),
+          );
         });
       });
     });
@@ -157,7 +137,8 @@ class _DetectorWidgetState extends State<DetectorWidget>
         title: Text(widget.title),
       ),
       body: Column(
-        spacing: 50.0,
+        crossAxisAlignment: CrossAxisAlignment.center,
+
         children: [
           Stack(
             children: [
@@ -175,28 +156,12 @@ class _DetectorWidgetState extends State<DetectorWidget>
             ],
           ),
 
-          _detect != null
-              ? ElevatedButton(
-                onPressed: () async {
-                  final String result = await Navigator.push(
-                    context,
-                    // Create the SelectionScreen in the next step.
-                    MaterialPageRoute(
-                      builder:
-                          (context) =>
-                              SelectionScreen(labels: (_detector?.labels)!),
-                    ),
-                  );
-                  _detector?.sendPort.send(
-                    Command(Codes.select, args: [result]),
-                  );
-                  setState(() {
-                    _detect = result;
-                  });
-                },
-                child: Text(_detect!),
-              )
-              : Container(),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Choose new label"),
+          ),
+
+          Text("Currently detecting label \"${widget.detectLabel}\""),
         ],
       ),
     );
