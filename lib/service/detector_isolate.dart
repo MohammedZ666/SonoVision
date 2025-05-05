@@ -14,7 +14,6 @@ import 'package:logger/logger.dart';
 import '../utils/image_utils.dart';
 import '../../models/detection_result.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
-import 'package:archive/archive.dart';
 
 ///////////////////////////////////////////////////////////////////////////////
 // **WARNING:** This is not production code and is only intended to be used for
