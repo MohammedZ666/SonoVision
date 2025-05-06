@@ -130,32 +130,11 @@ class Detector {
         stackTrace: stackTrace,
       );
     }
-
+    logger.e(
+      "${interpreter.getInputTensor(0).shape} \n ${interpreter.getOutputTensor(0).shape}  ",
+    );
     return interpreter;
   }
-
-  // static Future<List<String>> _loadLabels() async {
-  //   // return (await rootBundle.loadString(_labelPath)).split('\n');
-  //   // 1. Load ZIP file from assets
-  //   final ByteData zipData = await rootBundle.load(_modelPath);
-  //   final Uint8List zipBytes = zipData.buffer.asUint8List();
-
-  //   // 2. Decode ZIP
-  //   final Archive archive = ZipDecoder().decodeBytes(zipBytes);
-
-  //   for (final file in archive.files) {
-  //     if (file.name.contains("label")) {
-  //       List<String> labels = String.fromCharCodes(file.content).split('\n');
-  //       for (var i = 0; i < labels.length; i++) {
-  //         if (labels[i].contains('?')) {
-  //           labels[i] = "undefined$i";
-  //         }
-  //       }
-  //       return labels;
-  //     }
-  //   }
-  //   return await Future.delayed(Duration(microseconds: 1), () => ['']);
-  // }
 
   /// Starts CameraImage processing
   void processFrame(CameraImage cameraImage) {
@@ -256,8 +235,8 @@ class _DetectorServer {
         _sendPort.send(const Command(Codes.ready));
       case Codes.detect:
         _sendPort.send(const Command(Codes.busy));
-        final results = _processImage(command.args?[0] as CameraImage);
-        _sendPort.send(Command(Codes.result, args: [results]));
+      // final results = _processImage(command.args?[0] as CameraImage);
+      // _sendPort.send(Command(Codes.result, args: [results]));
       case Codes.select:
         _sendPort.send(const Command(Codes.busy));
         _select = command.args?[0] as String;
@@ -288,16 +267,6 @@ class _DetectorServer {
         "Image type -> ${cameraImage.format.group}, Platform ${Platform.operatingSystem}",
       );
     }
-    // var processImage = imglib.copyResize(
-    //   width: cameraImageRgb.height * 4 ~/ 3,
-    //   cameraImageRgb,
-    //   height: cameraImageRgb.height,
-    // );
-    // processImage = ImageUtils.fitCenterBitmap(
-    //   cameraImageRgb,
-    //   (_interpreter?.getInputTensor(0).shape[2])!,
-    //   (_interpreter?.getInputTensor(0).shape[1])!,
-    // );
 
     if (Platform.isAndroid) {
       cameraImageRgb = imglib.copyRotate(cameraImageRgb, angle: 90);

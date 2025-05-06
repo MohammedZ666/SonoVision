@@ -43,6 +43,9 @@ dependencies:
   vector_math: ^2.1.4
   sensors_plus: ^5.0.1
   flutter_soloud: ^3.1.8
+  json5: ^0.8.2
+
+
 
 
 
