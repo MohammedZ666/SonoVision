@@ -17,7 +17,9 @@ class _SelectionScreenState extends State<SelectionScreen> {
   late String _detectLabel;
   late String _modelName;
   final List<String> _supportedModels = [
-    'yolo11n_float32.tflite',
+    'yolo11n_int8.tflite',
+    'yolo11n_int8_nms.tflite',
+    'yolo11n_float32_nms.tflite',
     'efficientdet-lite2.tflite',
   ];
 
@@ -28,13 +30,14 @@ class _SelectionScreenState extends State<SelectionScreen> {
   }
 
   _loadLabels(String modelName) async {
-    final ByteData zipData = await rootBundle.load("assets/${modelName}");
+    final ByteData zipData = await rootBundle.load("assets/$modelName");
     final Uint8List zipBytes = zipData.buffer.asUint8List();
     final Archive archive = ZipDecoder().decodeBytes(zipBytes);
     logger.i("Attempting to load labels");
 
     for (final file in archive.files) {
       String content = String.fromCharCodes(file.content);
+      logger.i("file details, $content");
       if (file.name.contains("label")) {
         setState(() {
           _labels = _extractEfficientdetLabels(content);
@@ -49,16 +52,16 @@ class _SelectionScreenState extends State<SelectionScreen> {
   }
 
   List<String> _extractYoloLabels(String badJson) {
-    badJson = badJson
-        .replaceAll("'", "\"") // fix  {0 : 'value',..} -> {0 : "value",..}
-        .replaceAllMapped(
-          RegExp(r'([{,]\s*)(\d+)(\s*:)'),
-          (Match m) =>
-              '${m[1]}"${m[2]}"${m[3]}', // fix {0 : "value",..} -> {"0" : "value",..}
-        )
-        .replaceAll('False', 'false')
-        .replaceAll('True', 'true')
-        .replaceAll('None', 'null');
+    // badJson = badJson
+    //     .replaceAll("'", "\"") // fix  {0 : 'value',..} -> {0 : "value",..}
+    //     .replaceAllMapped(
+    //       RegExp(r'([{,]\s*)(\d+)(\s*:)'),
+    //       (Match m) =>
+    //           '${m[1]}"${m[2]}"${m[3]}', // fix {0 : "value",..} -> {"0" : "value",..}
+    //     )
+    //     .replaceAll('False', 'false')
+    //     .replaceAll('True', 'true')
+    //     .replaceAll('None', 'null');
 
     Map<String, dynamic> json = jsonDecode(badJson);
     Map<String, dynamic> names = json['names'] as Map<String, dynamic>;

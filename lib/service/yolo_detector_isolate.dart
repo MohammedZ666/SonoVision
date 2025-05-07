@@ -274,8 +274,8 @@ class _DetectorServer {
         .getBytes(order: imglib.ChannelOrder.rgb)
         .reshape(_interpreter!.getInputTensor(0).shape);
 
-    final outputs = {
-      0: [List<List<num>>.filled(84, List<num>.filled(8400, 0))],
+    var outputs = {
+      0: [List<List<dynamic>>.filled(300, List<dynamic>.filled(6, 0))],
     };
 
     try {
@@ -283,7 +283,6 @@ class _DetectorServer {
     } catch (e, stackTrace) {
       logger.e("Interpreter failed", error: e, stackTrace: stackTrace);
     }
-
     final results = _parseOutput(
       outputs,
       _interpreter!.getInputTensor(0).shape[1],
@@ -310,54 +309,48 @@ class _DetectorServer {
     int originalWidth,
     int originalHeight,
   ) {
-    final predictions = outputs[0]![0];
+    List<List<dynamic>> predictions = outputs[0]![0];
     final results = <DetectionResult>[];
-    const confThreshold = 0.2;
+    const confThreshold = 0.5;
     // const iouThreshold = 0.5;
-    const classThreshold = 0;
+    // const classThreshold = 0.25;
 
     final scaleX = originalWidth / modelWidth;
     final scaleY = originalHeight / modelHeight;
 
-    for (final prediction in predictions) {
-      final confidence = prediction[4];
+    for (var i = 0; i < predictions.length; i++) {
+      final prediction = predictions[i];
 
-      int classId = prediction[5].toInt();
-      var maxScore = 0.0;
-      for (int i = 5; i < prediction.length; i++) {
-        final score = prediction[i] * confidence;
-        if (score > maxScore) {
-          maxScore = score;
-          classId = i - 5;
-        }
-      }
-
-      // Skip low class confidence
-      if (maxScore < classThreshold) continue;
-      logger.e("$maxScore $classId");
+      double confidence = prediction[4];
+      if (confidence < confThreshold) continue;
 
       // Convert bounding box coordinates
-      final cx = prediction[0];
-      final cy = prediction[1];
-      final w = prediction[2];
-      final h = prediction[3];
+      // final cx = prediction[0];
+      // final cy = prediction[1];
+      // final w = prediction[2];
+      // final h = prediction[3];
 
-      final left = cx - w / 2;
-      final top = cy - h / 2;
-      final right = cx + w / 2;
-      final bottom = cy + h / 2;
+      final left = prediction[0];
+      final top = prediction[1];
+      final right = prediction[2];
+      final bottom = prediction[3];
+      int classId = prediction[5].toInt();
+
+      logger.e("$left $top $right $bottom $classId $confidence");
+
       results.add(
         DetectionResult(
           left: left,
           top: top,
           right: right,
           bottom: bottom,
-          label: _labels![classId.toInt()],
-          confidence: prediction[4],
+          label: _labels![classId],
+          confidence: confidence,
         ),
       );
+      if (results.length == 5) break;
     }
-    logger.i(results.length);
+
     return _nonMaxSuppression(results, 0.5);
   }
 
@@ -378,13 +371,13 @@ class _DetectorServer {
         if (suppressed[j]) continue;
 
         final iou = _calculateIoU(results[i], results[j]);
-        if (iou > iouThreshold || results[i].label != _select) {
+        if (iou > iouThreshold) {
           suppressed[j] = true;
         }
       }
     }
 
-    return selected.isNotEmpty ? [selected[0]] : [];
+    return selected;
   }
 
   // Intersection over Union calculation

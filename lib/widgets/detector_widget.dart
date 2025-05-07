@@ -85,7 +85,6 @@ class _DetectorWidgetState extends State<DetectorWidget>
   void _initStream() async {
     await _intializeCamera();
     if (widget.modelName.contains('yolo')) {
-      logger.e('in the yolo part');
       DetectorYolo.start(widget.modelName, widget.labels).then((instance) {
         setState(() {
           _detector = instance;
