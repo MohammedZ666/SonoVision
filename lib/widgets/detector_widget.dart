@@ -7,6 +7,8 @@ import 'package:logger/logger.dart';
 import 'custom_painter.dart';
 import '../models/detection_result.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
+import 'package:flutter_tflite/service/yolo_detector_isolate.dart';
+import 'package:flutter_tflite/models/command.dart';
 
 var logger = Logger(printer: PrettyPrinter());
 
@@ -32,7 +34,7 @@ class _DetectorWidgetState extends State<DetectorWidget>
   late CameraController _cameraController;
   bool _isReady = false;
   List<DetectionResult> _results = [];
-  Detector? _detector;
+  var _detector;
   late StreamSubscription _subscription;
   late SoundHandle _handle;
   double _locX = 0.0;
@@ -82,27 +84,52 @@ class _DetectorWidgetState extends State<DetectorWidget>
 
   void _initStream() async {
     await _intializeCamera();
-    Detector.start(widget.modelName, widget.labels).then((instance) {
-      setState(() {
-        _detector = instance;
-        _subscription = instance.resultsStream.stream.listen((
-          List<DetectionResult> values,
-        ) {
-          setState(() {
-            _results = values;
-            _isReady = true;
-            if (values.isNotEmpty) {
-              _updateSoundCueDirection();
-            } else {
-              SoLoud.instance.setPause(_handle, true);
-            }
+    if (widget.modelName.contains('yolo')) {
+      logger.e('in the yolo part');
+      DetectorYolo.start(widget.modelName, widget.labels).then((instance) {
+        setState(() {
+          _detector = instance;
+          _subscription = instance.resultsStream.stream.listen((
+            List<DetectionResult> values,
+          ) {
+            setState(() {
+              _results = values;
+              _isReady = true;
+              if (values.isNotEmpty) {
+                _updateSoundCueDirection();
+              } else {
+                SoLoud.instance.setPause(_handle, true);
+              }
+            });
+            _detector?.sendPort.send(
+              Command(Codes.select, args: [widget.detectLabel]),
+            );
           });
-          _detector?.sendPort.send(
-            Command(Codes.select, args: [widget.detectLabel]),
-          );
         });
       });
-    });
+    } else {
+      Detector.start(widget.modelName, widget.labels).then((instance) {
+        setState(() {
+          _detector = instance;
+          _subscription = instance.resultsStream.stream.listen((
+            List<DetectionResult> values,
+          ) {
+            setState(() {
+              _results = values;
+              _isReady = true;
+              if (values.isNotEmpty) {
+                _updateSoundCueDirection();
+              } else {
+                SoLoud.instance.setPause(_handle, true);
+              }
+            });
+            _detector?.sendPort.send(
+              Command(Codes.select, args: [widget.detectLabel]),
+            );
+          });
+        });
+      });
+    }
   }
 
   Future<void> _intializeCamera() async {

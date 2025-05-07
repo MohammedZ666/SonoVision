@@ -46,6 +46,9 @@ import 'package:flutter_tflite/models/command.dart';
 //
 ///////////////////////////////////////////////////////////////////////////////
 
+/// All the command codes that can be sent and received between [DetectorYolo] and
+/// [_DetectorServer].
+
 var logger = Logger(printer: PrettyPrinter());
 
 /// A Simple Detector that handles object detection via Service
@@ -53,8 +56,8 @@ var logger = Logger(printer: PrettyPrinter());
 /// All the heavy operations like pre-processing, detection, ets,
 /// are executed in a background isolate.
 /// This class just sends and receives messages to the isolate.
-class Detector {
-  Detector._(this._isolate, this._interpreter, this._labels);
+class DetectorYolo {
+  DetectorYolo._(this._isolate, this._interpreter, this._labels);
 
   final Isolate _isolate;
   late final Interpreter _interpreter;
@@ -77,7 +80,10 @@ class Detector {
       StreamController<List<DetectionResult>>();
 
   /// [main] method equivalent of the isolate...
-  static Future<Detector> start(String modelName, List<String> labels) async {
+  static Future<DetectorYolo> start(
+    String modelName,
+    List<String> labels,
+  ) async {
     final ReceivePort receivePort = ReceivePort();
     // sendPort - To be used by service Isolate to send message to our ReceiverPort
     final Isolate isolate = await Isolate.spawn(
@@ -85,7 +91,7 @@ class Detector {
       receivePort.sendPort,
     );
 
-    final Detector result = Detector._(
+    final DetectorYolo result = DetectorYolo._(
       isolate,
       await _loadModel(modelName),
       labels,
@@ -168,7 +174,7 @@ class Detector {
   }
 }
 
-/// The portion of the [Detector] that runs on the background isolate.
+/// The portion of the [DetectorYolo] that runs on the background isolate.
 ///
 /// This is where we use the new feature Background Isolate Channels, which
 /// allows us to use plugins from background isolates.
@@ -269,10 +275,7 @@ class _DetectorServer {
         .reshape(_interpreter!.getInputTensor(0).shape);
 
     final outputs = {
-      0: [List<List<num>>.filled(25, List<num>.filled(4, 0))],
-      1: [List<num>.filled(25, 0)],
-      2: [List<num>.filled(25, 0)],
-      3: [0.0],
+      0: [List<List<num>>.filled(84, List<num>.filled(8400, 0))],
     };
 
     try {
@@ -300,54 +303,62 @@ class _DetectorServer {
     return results;
   }
 
-  // val locationOutputShape = interpreter!!.getOutputTensor(0).shape()
-  // val categoryOutputShape = interpreter!!.getOutputTensor(1).shape()
-  // val scoreOutputShape = interpreter!!.getOutputTensor(2).shape()
   List<DetectionResult> _parseOutput(
-    Map<int, List> output,
-    int modelInputWidth,
-    int modelInputHeight,
+    Map<int, List> outputs,
+    int modelHeight,
+    int modelWidth,
     int originalWidth,
     int originalHeight,
   ) {
-    List<List<double>> locationResult = output[0]![0];
-    List<double> categoryResult = output[1]![0];
-    List<double> scoreResult = output[2]![0];
+    final predictions = outputs[0]![0];
     final results = <DetectionResult>[];
+    const confThreshold = 0.2;
     // const iouThreshold = 0.5;
-    // const classThreshold = 0.25;
+    const classThreshold = 0;
 
-    for (var i = 0; i < locationResult.length; i++) {
-      if (scoreResult[i] < 0.5) continue;
-      final prediction = locationResult[i];
+    final scaleX = originalWidth / modelWidth;
+    final scaleY = originalHeight / modelHeight;
 
-      // in the following order: [ymin, xmin, ymax, xmax]
+    for (final prediction in predictions) {
+      final confidence = prediction[4];
 
-      if (prediction[0] + prediction[1] + prediction[2] + prediction[3] ==
-          0.0) {
-        continue;
+      int classId = prediction[5].toInt();
+      var maxScore = 0.0;
+      for (int i = 5; i < prediction.length; i++) {
+        final score = prediction[i] * confidence;
+        if (score > maxScore) {
+          maxScore = score;
+          classId = i - 5;
+        }
       }
 
-      final top = prediction[0];
-      final left = prediction[1];
-      final bottom = prediction[2];
-      final right = prediction[3];
-      final String labelText = _labels![categoryResult[i].toInt()];
-      if (labelText == _select) {
-        results.add(
-          DetectionResult(
-            left: left,
-            top: top,
-            right: right,
-            bottom: bottom,
-            label: labelText,
-            confidence: scoreResult[i],
-          ),
-        );
-        break;
-      }
+      // Skip low class confidence
+      if (maxScore < classThreshold) continue;
+      logger.e("$maxScore $classId");
+
+      // Convert bounding box coordinates
+      final cx = prediction[0];
+      final cy = prediction[1];
+      final w = prediction[2];
+      final h = prediction[3];
+
+      final left = cx - w / 2;
+      final top = cy - h / 2;
+      final right = cx + w / 2;
+      final bottom = cy + h / 2;
+      results.add(
+        DetectionResult(
+          left: left,
+          top: top,
+          right: right,
+          bottom: bottom,
+          label: _labels![classId.toInt()],
+          confidence: prediction[4],
+        ),
+      );
     }
-    return results;
+    logger.i(results.length);
+    return _nonMaxSuppression(results, 0.5);
   }
 
   List<DetectionResult> _nonMaxSuppression(
@@ -367,13 +378,13 @@ class _DetectorServer {
         if (suppressed[j]) continue;
 
         final iou = _calculateIoU(results[i], results[j]);
-        if (iou > iouThreshold) {
+        if (iou > iouThreshold || results[i].label != _select) {
           suppressed[j] = true;
         }
       }
     }
 
-    return selected;
+    return selected.isNotEmpty ? [selected[0]] : [];
   }
 
   // Intersection over Union calculation
@@ -390,26 +401,5 @@ class _DetectorServer {
     final areaB = (b.right - b.left) * (b.bottom - b.top);
 
     return interArea / (areaA + areaB - interArea);
-  }
-
-  /// Object detection main function
-  List<List<Object>> _runInference(List<List<List<num>>> imageMatrix) {
-    // Set input tensor [1, 300, 300, 3]
-    final input = [imageMatrix];
-
-    // Set output tensor
-    // Locations: [1, 10, 4]
-    // Classes: [1, 10],
-    // Scores: [1, 10],
-    // Number of detections: [1]
-    final output = {
-      0: [List<List<num>>.filled(10, List<num>.filled(4, 0))],
-      1: [List<num>.filled(10, 0)],
-      2: [List<num>.filled(10, 0)],
-      3: [0.0],
-    };
-
-    _interpreter!.runForMultipleInputs([input], output);
-    return output.values.toList();
   }
 }

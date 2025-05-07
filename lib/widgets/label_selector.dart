@@ -4,7 +4,6 @@ import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tflite/widgets/detector_widget.dart';
-import 'package:json5/json5.dart';
 
 class SelectionScreen extends StatefulWidget {
   const SelectionScreen({super.key});
@@ -16,6 +15,7 @@ class SelectionScreen extends StatefulWidget {
 class _SelectionScreenState extends State<SelectionScreen> {
   List<String>? _labels;
   late String _detectLabel;
+  late String _modelName;
   final List<String> _supportedModels = [
     'yolo11n_float32.tflite',
     'efficientdet-lite2.tflite',
@@ -103,7 +103,8 @@ class _SelectionScreenState extends State<SelectionScreen> {
               onSelected: (value) {
                 setState(() {
                   _labels = null;
-                  _loadLabels(value!);
+                  _modelName = value!;
+                  _loadLabels(value);
                 });
               },
             ),
@@ -136,7 +137,7 @@ class _SelectionScreenState extends State<SelectionScreen> {
                               builder:
                                   (context) => DetectorWidget(
                                     title: ("Detect $_detectLabel"),
-                                    modelName: "efficientdet-lite2.tflite",
+                                    modelName: _modelName,
                                     detectLabel: _detectLabel,
                                     labels: _labels!,
                                   ),
