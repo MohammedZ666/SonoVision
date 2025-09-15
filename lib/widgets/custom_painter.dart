@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'detection_result.dart';
+import '../models/detection_result.dart';
 
 class BoundingBoxPainter extends CustomPainter {
   final List<DetectionResult> results;
@@ -10,37 +10,33 @@ class BoundingBoxPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint =
         Paint()
-          ..color = Colors.red
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2;
-
-    final textPaint =
-        Paint()
-          ..color = Colors.red
-          ..style = PaintingStyle.fill;
+          ..strokeWidth = 3;
 
     for (final result in results) {
-      final rect = Rect.fromLTRB(
-        result.left,
-        result.top,
-        result.right,
-        result.bottom,
-      );
+      Color color =
+          Colors.primaries[(result.label.length + result.label.codeUnitAt(0)) %
+              Colors.primaries.length];
+      paint.color = color;
 
+      final rect = result.renderLocation;
       canvas.drawRect(rect, paint);
 
       // Draw label
       final textSpan = TextSpan(
         text:
             '${result.label} ${(result.confidence * 100).toStringAsFixed(1)}%',
-        style: TextStyle(backgroundColor: Colors.red, color: Colors.white),
+        style: TextStyle(backgroundColor: color, color: Colors.white),
       );
       final textPainter = TextPainter(
         text: textSpan,
         textDirection: TextDirection.ltr,
       );
       textPainter.layout();
-      textPainter.paint(canvas, Offset(result.left, result.top));
+      textPainter.paint(
+        canvas,
+        Offset(result.renderLocation.left, result.renderLocation.top),
+      );
     }
   }
 
