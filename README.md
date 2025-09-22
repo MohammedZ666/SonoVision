@@ -43,5 +43,5 @@ flutter run
 To contribute, create an [create an issue](../../issues) and then open a PR with your proposed fix.
 
 ## Funding
-This project was funded by BRACU University's RSGI initiative for the *AI Powered Enhancement fof University Life Accessibility for Blind People* project. 
+This project was funded by BRACU University's Research Seed Grant Initiative for the *AI Powered Enhancement fof University Life Accessibility for Blind People* project. 
       
