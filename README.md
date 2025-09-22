@@ -40,7 +40,7 @@ flutter run
 - [ ] Releasing for Google Play Store and App Store
 
 ## Contribution
-Please consider contributing to this open-source project. Especially, if you can train an open-set object detector with <10M parameters along with bugfixes and feature enhancement you may find
+To contribute, create an [create an issue](../../issues) and then open a PR with your proposed fix.
 
 ## Funding
 This project was funded by BRACU University's Research Seed Grant Initiative for the `AI Powered Enhancement fof University Life Accessibility for Blind People`. 
