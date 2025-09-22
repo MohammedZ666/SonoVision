@@ -12,26 +12,36 @@ Locating objects for the visually impaired is a significant challenge and is som
 
 The figures above shows the working principle of our application, indicating the position of an Object of Interest (cup) on left, center, and, right through sound cues in the left, both, and right ears respectivly through ear/phones (as indicated by 🔊). 
 
-## Installation (Android only)
+## Setup (Android only)
 
 Follow these steps to build and run the project locally:
 
 ### Prerequisites
-- [Insall flutter](https://docs.flutter.dev/get-started/install)
+- [Insall Flutter](https://docs.flutter.dev/get-started/install)
 - [Install a compatible IDE](https://docs.flutter.dev/get-started/install/windows/mobile#configure-a-text-editor-or-ide)
 - A physical device or emulator/simulator
 
-### Steps
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/MohammedZ666/SonoVision.git
-   cd SonoVision
-   ```
-2. **Get dependencies**
-   ```
-   flutter pub get
-   ```
-3. ** Run the app**
-   ```
-   flutter run
-   ```
+### Installation
+Run the following commands in your IDE's terminal to download and run the project:
+ ```bash
+# clone repo 
+git clone https://github.com/MohammedZ666/SonoVision.git
+cd SonoVision
+# get dependencies
+flutter pub get
+# run the app
+flutter run
+```
+## TODO Checklist
+
+- [x] ~Sound cue detection functionality based on EfficientDet-D2~
+- [ ] Sound cue based object relocation through open-set detectors
+- [ ] Building and testing on iOS
+- [ ] Releasing for Google Play Store and App Store
+
+## Contribution
+Please consider contributing to this open-source project. Especially, if you can train an open-set object detector with <10M parameters along with bugfixes and feature enhancement you may find
+
+## Funding
+This project was funded by BRACU University's Research Seed Grant Initiative for the `AI Powered Enhancement fof University Life Accessibility for Blind People`. 
+      
